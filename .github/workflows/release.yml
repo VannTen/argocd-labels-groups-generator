@@ -2,6 +2,7 @@ name: Publish container
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
 
@@ -21,7 +22,14 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Derive commit image tag
+        id: describe
+        if: github.ref_type == 'branch'
+        shell: bash
+        run: echo "tag=$(git describe --tags --long --always --match 'v[0-9]*')" >> "$GITHUB_OUTPUT"
 
       - name: Set image name
         id: image
@@ -47,8 +55,9 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
+            type=raw,value=${{ steps.describe.outputs.tag }},enable=${{ github.ref_type == 'branch' }}
           labels: |
             org.opencontainers.image.title=argocd-labels-groups-generator
             org.opencontainers.image.description=Argo CD ApplicationSet plugin that groups label values
