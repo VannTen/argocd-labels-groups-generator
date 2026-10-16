@@ -35,11 +35,11 @@ type GVK struct {
 }
 
 type Input struct {
-	Namespace string `json:"namespace"`
-	GVK       GVK    `json:"gvk"`
-	Selector  string `json:"selector,omitempty"`
-	GroupBy   string `json:"groupBy"`
-	Collect   string `json:"collect"`
+	Namespace  string `json:"namespace"`
+	GVK        GVK    `json:"gvk"`
+	Selector   string `json:"selector,omitempty"`
+	GroupBy    string `json:"groupBy"`
+	ValuesFrom string `json:"valuesFrom"`
 }
 
 type Server struct {
@@ -115,13 +115,13 @@ func (s *Server) getParams(w http.ResponseWriter, r *http.Request) {
 		objectLabels := u.GetLabels()
 		if selector.Matches(labels.Set(objectLabels)) &&
 			objectLabels[params.GroupBy] != "" &&
-			objectLabels[params.Collect] != "" {
+			objectLabels[params.ValuesFrom] != "" {
 			objects = append(objects, u)
 		}
 	}
 
 	response := Response{}
-	response.Output.Parameters = generator.Generate(objects, params.GroupBy, params.Collect)
+	response.Output.Parameters = generator.Generate(objects, params.GroupBy, params.ValuesFrom)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {

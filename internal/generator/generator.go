@@ -28,7 +28,7 @@ func groupBy[T any, K comparable, V comparable](
 
 func Generate(
 	metadatas []*unstructured.Unstructured,
-	groupKey, collectKey string,
+	groupKey, valuesKey string,
 ) []map[string]any {
 
 	groups := groupBy(
@@ -37,7 +37,7 @@ func Generate(
 			return obj.GetLabels()[groupKey]
 		},
 		func(obj *unstructured.Unstructured) string {
-			return obj.GetLabels()[collectKey]
+			return obj.GetLabels()[valuesKey]
 		})
 
 	// Make output deterministic.
@@ -57,8 +57,8 @@ func Generate(
 		sort.Strings(values)
 
 		parameters = append(parameters, map[string]any{
-			groupKey:   name,
-			collectKey: values,
+			groupKey:  name,
+			valuesKey: values,
 		})
 	}
 
