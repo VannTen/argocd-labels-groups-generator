@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -129,6 +130,25 @@ func (s *Server) getParams(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) authenticateArgoCD(token []byte, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("Authorization")
+
+		if !strings.HasPrefix(header, "Bearer ") {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		provided := strings.TrimPrefix(header, "Bearer ")
+		if subtle.ConstantTimeCompare([]byte(provided), token) != 1 {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.ready.Load() {
 		http.Error(w, "not ready", http.StatusServiceUnavailable)
@@ -189,6 +209,16 @@ func run() error {
 	gvr, err := parseGVR(*gvrString)
 	if err != nil {
 		return err
+	}
+
+	token, err := os.ReadFile("/var/run/argo/token")
+	if err != nil {
+		log.Fatalf("reading Argo CD token: %v", err)
+	}
+
+	token = []byte(strings.TrimSpace(string(token)))
+	if len(token) == 0 {
+		log.Fatal("Argo CD token is empty")
 	}
 
 	var config *rest.Config
@@ -254,7 +284,8 @@ func run() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthy", server.healthyHandler)
 	mux.HandleFunc("/ready", server.readyHandler)
-	mux.HandleFunc("/api/v1/getparams.execute", server.getParams)
+	mux.Handle("/api/v1/getparams.execute",
+		server.authenticateArgoCD(token, http.HandlerFunc(server.getParams)))
 
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
