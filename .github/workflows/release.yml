@@ -42,10 +42,7 @@ jobs:
           fi
 
           allowed_signers="$RUNNER_TEMP/allowed_signers"
-          printf 'release-signer namespaces="git" %s\n' \
-            "$ALLOWED_SIGNERS" > "$allowed_signers"
-
-          cat "$allowed_signers"
+          printf "$ALLOWED_SIGNERS" > "$allowed_signers"
 
           git \
             -c gpg.format=ssh \
