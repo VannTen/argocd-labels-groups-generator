@@ -45,6 +45,8 @@ jobs:
           printf 'release-signer namespaces="git" %s\n' \
             "$ALLOWED_SIGNERS" > "$allowed_signers"
 
+          cat "$allowed_signers"
+
           git \
             -c gpg.format=ssh \
             -c gpg.ssh.allowedSignersFile="$allowed_signers" \
