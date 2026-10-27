@@ -281,43 +281,54 @@ func run() error {
 	server := &Server{informer: informer}
 	server.ready.Store(true)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthy", server.healthyHandler)
-	mux.HandleFunc("/ready", server.readyHandler)
-	mux.Handle("/api/v1/getparams.execute",
+	pluginMux := http.NewServeMux()
+	pluginMux.Handle("/api/v1/getparams.execute",
 		server.authenticateArgoCD(token, http.HandlerFunc(server.getParams)))
 
+	probeMux := http.NewServeMux()
+	probeMux.HandleFunc("/healthyz", server.healthyHandler)
+	probeMux.HandleFunc("/readyz", server.readyHandler)
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
 		addr = ":4355"
 	}
 
-	httpServer := &http.Server{
+	pluginHTTPServer := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           pluginMux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	probeHTTPServer := &http.Server{
+		Addr:              ":8081",
+		Handler:           probeMux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	serveErr := make(chan error, 1)
-	go func() {
-		err := httpServer.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serveErr <- fmt.Errorf("HTTP server: %w", err)
-			return
-		}
-		serveErr <- nil
-	}()
+	serve := func(name string, srv *http.Server) {
+		go func() {
+			err := srv.ListenAndServe()
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				serveErr <- fmt.Errorf("%s HTTP server: %w", name, err)
+			}
+		}()
+	}
+
+	serve("plugin", pluginHTTPServer)
+	serve("probe", probeHTTPServer)
 
 	log.Printf("watching %s in namespace %q", gvr, *namespace)
-	log.Printf("listening on %s", addr)
+	log.Printf("plugin API listening on %s", addr)
+	log.Printf("health probes listening on :8081")
 
+	var runErr error
 	select {
 	case <-signalCtx.Done():
 		log.Print("shutdown signal received")
 	case err := <-serveErr:
-		if err != nil {
-			log.Printf("server stopped: %v", err)
-		}
+		runErr = err
+		log.Printf("server stopped unexpectedly: %v", err)
 	}
 
 	// Remove this pod from readiness before draining requests.
@@ -332,9 +343,31 @@ func run() error {
 	)
 	defer cancelShutdown()
 
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		_ = httpServer.Close()
-		return fmt.Errorf("shutting down HTTP server: %w", err)
+	// Shut down both listeners concurrently, sharing one deadline.
+	shutdownErrs := make(chan error, 2)
+
+	for _, srv := range []*http.Server{
+		pluginHTTPServer,
+		probeHTTPServer,
+	} {
+		go func(srv *http.Server) {
+			if err := srv.Shutdown(shutdownCtx); err != nil {
+				_ = srv.Close()
+				shutdownErrs <- err
+				return
+			}
+			shutdownErrs <- nil
+		}(srv)
+	}
+
+	for range 2 {
+		if err := <-shutdownErrs; err != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("shutting down HTTP server: %w", err))
+		}
+	}
+
+	if runErr != nil {
+		return runErr
 	}
 
 	// The informer is stopped by cancelInformer when run returns.
