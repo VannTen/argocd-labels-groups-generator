@@ -79,6 +79,7 @@ jobs:
       meta-tags: |
         type=ref,event=tag
         type=semver,pattern={{version}}
+        type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
     secrets:
       registry-auths: |
