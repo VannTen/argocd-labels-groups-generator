@@ -5,6 +5,8 @@ label and collects the distinct values of another label. It watches a
 configured Kubernetes resource through a shared informer and answers
 ApplicationSet plugin requests from its cache.
 
+AI Disclaimer: The code was drafted with OpenAI GPT-6.
+
 ## Example use case: cluster-aware GitOps promotion
 
 Original use case for this project: using an Application Set to generate one
@@ -13,8 +15,7 @@ Promoter](https://gitops-promoter.readthedocs.io/en/latest/)) per application
 on a set of environments/Kubernetes cluster, where not all applications are
 deployed on each cluster, but the promotion graph is shared.
 
-
-e, ask for the distinct `cluster` label values grouped by `application`:
+Ask for the distinct `cluster` label values grouped by `application`:
 
 ```json
 {
@@ -50,7 +51,10 @@ The response has one entry per application, for example:
 The promoter can then conditionally construct its DAG: e.g. create or enable an
 edge only when the relevant application exists in the source and/or target
 cluster. The plugin reports observed membership; the promotion policy remains
-the responsibility of the application created from the applicationset (using jsonnet to prune a fixed DAG based on the `cluster` parameter)
+the responsibility of the application created from the applicationset (using
+jsonnet to prune a fixed DAG based on the `cluster` parameter).
+
+See `deploy/test-appset.yaml` for a full ApplicationSet example.
 
 ## Configuration
 
@@ -68,8 +72,10 @@ The request's `selector` further filters cached objects per request. `groupBy` a
 Endpoints:
 
 - `POST /api/v1/getparams.execute` — ApplicationSet plugin request.
-- `GET /healthy` — liveness probe.
-- `GET /ready` — readiness probe; returns `503` until the informer cache has synced and while shutting down.
+
+The probes are on a separate listener (:8081)
+- `GET /healthyz` - liveness probe.
+- `GET /readyz` - readiness probe; returns `503` until the informer cache has synced and while shutting down.
 
 Example local request (adjust the URL and request file as needed):
 
