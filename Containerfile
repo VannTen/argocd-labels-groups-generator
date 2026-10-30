@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # syntax=docker/dockerfile:1
 
 FROM golang:1.26-alpine AS build

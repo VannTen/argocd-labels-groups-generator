@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 name: Release
 
 on:
@@ -80,6 +81,9 @@ jobs:
         type=ref,event=tag
         type=semver,pattern={{version}}
         type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+    meta-annotations: |
+      org.opencontainers.image.licenses=Apache-2.0
+      org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
     secrets:
       registry-auths: |

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 ---
 # Example appset generator to group Argo CD Applications by the `cluster` and
 # `application` labels.
