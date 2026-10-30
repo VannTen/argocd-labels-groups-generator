@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/dynamic"
 	dynamicinformer "k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/rest"
@@ -37,8 +39,6 @@ type GVK struct {
 }
 
 type Input struct {
-	Namespace  string `json:"namespace"`
-	GVK        GVK    `json:"gvk"`
 	Selector   string `json:"selector,omitempty"`
 	GroupBy    string `json:"groupBy"`
 	ValuesFrom string `json:"valuesFrom"`
@@ -86,14 +86,26 @@ func parseGVR(s string) (schema.GroupVersionResource, error) {
 }
 
 func (s *Server) getParams(w http.ResponseWriter, r *http.Request) {
+
+	const maxRequestBody = 1 << 16 // 64 KiB
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
 	var req Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decoder.Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		http.Error(w, "request must contain exactly one JSON value", http.StatusBadRequest)
 		return
 	}
 
@@ -104,6 +116,17 @@ func (s *Server) getParams(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "invalid selector: "+err.Error(), http.StatusBadRequest)
 		return
+	}
+	if params.GroupBy == params.ValuesFrom {
+		http.Error(w, "groupBy and valuesFrom must be different", http.StatusBadRequest)
+		return
+	}
+	for _, label := range []string{params.GroupBy, params.ValuesFrom} {
+		if problems := validation.IsQualifiedName(label); len(problems) > 0 {
+			http.Error(w, fmt.Sprintf("invalid label key %q: %s",
+				label, strings.Join(problems, "; ")), http.StatusBadRequest)
+			return
+		}
 	}
 
 	objects := make([]*unstructured.Unstructured, 0, len(s.informer.GetStore().List()))
