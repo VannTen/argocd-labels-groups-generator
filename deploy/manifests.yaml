@@ -1,0 +1,117 @@
+# For simplicity, the resources are assumed to be deployed in the same
+# namespace as ArgoCD
+#
+# WARNING: The deployment include an insecure secret for the "argocd -> generator plugin" requests auth.
+# It should NOT be used except for testing.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: generator-plugin-labels
+  name: generator-plugin-labels
+spec:
+  selector:
+    matchLabels:
+      app: generator-plugin-labels
+  template:
+    metadata:
+      labels:
+        app: generator-plugin-labels
+    spec:
+      serviceAccountName: argocd-labels-groups-generator
+      containers:
+      - image: ghcr.io/vannten/argocd-labels-groups-generator:latest
+        name: argocd-labels-groups-generator
+        env:
+          - name: RESOURCE_GVR
+            value: argoproj.io/v1alpha1/applications
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        volumeMounts:
+        - name: argocd-auth-token
+          mountPath: /var/run/argo/token
+          subPath: token
+        livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 3 periodSeconds: 3
+        livenessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            periodSeconds: 5
+      volumes:
+      - name: argocd-auth-token
+        secret:
+          secretName: plugin-creds
+          items:
+          - key: token
+            path: token
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: generator-plugin-labels
+spec:
+  ports:
+  - port: 4355
+    protocol: TCP
+    targetPort: 4355
+  selector:
+    app: generator-plugin-labels
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: generator-plugin-labels
+data:
+  baseUrl: http://generator-plugin-labels:4355
+  token: $plugin-creds:plugin.generator-plugin-labels.token
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: plugin-creds
+  labels:
+    app.kubernetes.io/part-of: argocd
+stringData:
+  plugin.generator-plugin-labels.token: "insecure_CHANGEME!"
+---
+# Example for ArgoCD applications
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-labels-groups-generator
+  namespace: argocd
+rules:
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - applications
+    verbs:
+      - list
+      - watch
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-labels-groups-generator
+  namespace: argocd
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-labels-groups-generator
+  namespace: argocd
+subjects:
+  - kind: ServiceAccount
+    name: argocd-labels-groups-generator
+    namespace: argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argocd-labels-groups-generator

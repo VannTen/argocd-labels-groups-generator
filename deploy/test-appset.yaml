@@ -1,0 +1,75 @@
+---
+# Example appset generator to group Argo CD Applications by the `cluster` and
+# `application` labels.
+#
+# Given the following Applications labels (metadata only):
+#
+# cert-manager-clusterA:
+#   # labels
+#   application: cert-manager
+#   cluster: clusterA
+#
+# cert-manager-clusterB:
+#   # labels
+#   application: cert-manager
+#   cluster: clusterB
+#
+# external-dns-clusterA:
+#   # labels
+#   application: external-dns
+#   cluster: clusterA
+#
+# The generator will produce one group per application, with the list of
+# clusters where that application is deployed.
+#
+# Example output:
+#
+# - application: cert-manager
+#   clusters:
+#     - clusterA
+#     - clusterB
+#
+# - application: external-dns
+#   clusters:
+#     - clusterA
+#
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: promotion-strategies
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - plugin:
+        # Specify the configMap where the plugin configuration is located.
+        configMapRef:
+          name: generator-plugin-labels
+        input:
+          parameters:
+            groupBy: "application"
+            valuesFrom: "cluster"
+        requeueAfterSeconds: 15
+  template:
+    metadata:
+      name: '{{ .application }}-promotion-strategy'
+      labels:
+        application: '{{ .application }}'
+    spec:
+      source:
+        repoURL: https://my.git.example.com/group/my_repo.git
+        targetRevision: main
+        path: .
+        directory:
+          jsonnet:
+            tlas:
+              - name: application
+                value: '{{ .application }}'
+              - name: clusters
+                # Serialize the array as JSON so Jsonnet receives a structured value.
+                value: '{{ toJson .cluster }}'
+                code: true
+
+      destination:
+        name: my_cluster
+        namespace: argocd
