@@ -188,6 +188,13 @@ func (s *Server) healthyHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ok\n"))
 }
 
+func envOr(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
 func main() {
 	if err := run(); err != nil {
 		log.Printf("ERROR: %v", err)
@@ -221,6 +228,11 @@ func run() error {
 		os.Getenv("KUBE_CONTEXT"),
 		"Kubeconfig context to use",
 	)
+	argocdTokenPath := flag.String(
+		"argocd-token-path",
+		envOr("ARGOCD_TOKEN_PATH", "/var/run/argo/token"),
+		"Path to argocd token, used for incoming requests validation (default: /var/run/argo/token)",
+	)
 	flag.Parse()
 
 	if *gvrString == "" {
@@ -235,7 +247,7 @@ func run() error {
 		return err
 	}
 
-	token, err := os.ReadFile("/var/run/argo/token")
+	token, err := os.ReadFile(*argocdTokenPath)
 	if err != nil {
 		log.Fatalf("reading Argo CD token: %v", err)
 	}
