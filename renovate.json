@@ -5,6 +5,6 @@
     "helpers:pinGitHubActionDigests"
   ],
   "postUpdateOptions": [
-    "goModTidy"
+    "gomodTidy"
   ]
 }
