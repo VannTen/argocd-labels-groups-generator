@@ -322,7 +322,7 @@ func run() error {
 		server.authenticateArgoCD(token, http.HandlerFunc(server.getParams)))
 
 	probeMux := http.NewServeMux()
-	probeMux.HandleFunc("/healthyz", server.healthyHandler)
+	probeMux.HandleFunc("/healthz", server.healthyHandler)
 	probeMux.HandleFunc("/readyz", server.readyHandler)
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
