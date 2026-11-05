@@ -51,7 +51,7 @@ spec:
         secret:
           secretName: plugin-creds
           items:
-          - key: token
+          - key: plugin.generator-plugin-labels.token
             path: token
 ---
 apiVersion: v1
