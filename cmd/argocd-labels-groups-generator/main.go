@@ -50,7 +50,8 @@ type Server struct {
 }
 
 type Request struct {
-	Input struct {
+	ApplicationSetName string `json:"applicationSetName"`
+	Input              struct {
 		Parameters Input `json:"parameters"`
 	} `json:"input"`
 }
